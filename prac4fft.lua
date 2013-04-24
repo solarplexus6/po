@@ -40,7 +40,7 @@ function ShiftDFT(src_im)
     cv.Copy(tmp,q2)
 end
 
-filename=not arg[1] and "lena.png" or arg[1]
+filename=not arg[1] and "sin2.png" or arg[1]
 
 im = cv.LoadImage( filename, cv.CV_LOAD_IMAGE_GRAYSCALE );
 if not im then error("Couldn't load image") end
@@ -64,6 +64,7 @@ image_Im = cv.CreateImage( dft_size, cv.IPL_DEPTH_64F, 1);
 dftRe = cv.CreateMat( dft_M, dft_N, cv.CV_64FC1 );
 dftIm = cv.CreateMat( dft_M, dft_N, cv.CV_64FC1 );
 tmpMat = cv.CreateMat( dft_M, dft_N, cv.CV_64FC1 );
+tmpMat2= cv.CreateMat(dft_M,dft_N,cv.CV_64FC1)
 
 tmp=cv.CreateMatHeader(dft_M,dft_N,cv.CV_64FC2)
 
@@ -71,7 +72,7 @@ tmp=cv.CreateMatHeader(dft_M,dft_N,cv.CV_64FC2)
 cv.GetSubRect( dft_A, tmp, cv.Rect(0,0, im.width, im.height));
 cv.Copy( complexInput, tmp, nil );
 if dft_A.cols > im.width then
-  cv.GetSubRect( dft_A, tmp, cvRect(im.width,0, dft_A.cols - im.width, im.height));
+  cv.GetSubRect( dft_A, tmp, cv.Rect(im.width,0, dft_A.cols - im.width, im.height));
   cv.Zero(tmp);
 end
 
@@ -97,7 +98,6 @@ idftC1 = cv.CreateMat( dft_M, dft_N, cv.CV_64FC1 );
 cv.DFT( dft_A, idftC2, cv.CV_DXT_INVERSE, complexInput.height);
 idftImage = cv.CreateImage( dft_size, cv.IPL_DEPTH_64F, 1);
 cv.Split( idftC2, idftImage, nil, nil, nil);
-LogScaleImageInPlance(idftImage)
 FinalScaleImageInplace(idftImage)
 cv.ShowImage(IMG_IDFT, idftImage)
 
@@ -139,34 +139,64 @@ local variants = {
     function ()        
         cv.DFT( dft_A, idftC2, cv.CV_DXT_INVERSE, complexInput.height) 
         cv.Split( idftC2, idftImage, nil, nil, nil)
+        print 'not altered idft'
     end,
     -- 2. real part
     function ()        
         cv.DFT( dftRe, idftC1, cv.CV_DXT_INVERSE, complexInput.height)
         cv.Split( idftC1, idftImage, nil, nil, nil)
+        print 'real part'
     end,
     -- 3. imaginary part
     function ()        
         cv.DFT( dftIm, idftC1, cv.CV_DXT_INVERSE, complexInput.height);            
-        cv.Split( idftC1, idftImage, nil, nil, nil);
+        cv.Split( idftC1, idftImage, nil, nil, nil)
+        print 'imaginery part'
     end,
-    -- 4. real part = 0
+    -- 4. im part = 0
     function ()
         cv.Zero(tmpMat)
         cv.Merge(dftRe, tmpMat, nil, nil, idftC2)
         cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
-        cv.Split( idftC2, idftImage, nil, nil, nil);
+        cv.Split( idftC2, idftImage, nil, nil, nil)
+        print 'im part = 0'
     end,
     -- 5. im part = 0
     function ()
         cv.Zero(tmpMat)
         cv.Merge(tmpMat, dftIm, nil, nil, idftC2)
         cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
-        cv.Split( idftC2, idftImage, nil, nil, nil);
+        cv.Split( idftC2, idftImage, nil, nil, nil)
+        print 'real part = 0'
+    end,
+    -- 6. norm
+    function ()
+        cv.Pow( dftRe, tmpMat, 2.0)
+        cv.Pow( dftIm, tmpMat2, 2.0)
+        cv.Add( tmpMat, tmpMat2, idftC1, nil)
+        cv.DFT( idftC1, idftC1, cv.CV_DXT_INVERSE, complexInput.height)
+        cv.Split( idftC1, idftImage, nil, nil, nil)
+        print 'norm'
+    end,
+    -- 7. phase
+    function ()
+        cv.Copy( angle, idftC1)
+        cv.DFT( idftC1, idftC1, cv.CV_DXT_INVERSE, complexInput.height)
+        cv.Split( idftC1, idftImage, nil, nil, nil)
+        print 'phase'
+    end,
+    -- 7. conjugate
+    function ()
+        local minus = cv.ScalarAll(-1)
+        cv.Mul(dftIm, minus, tmpMat)
+        cv.Merge(dftRe, dftIm, idftC2);
+        cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
+        cv.Split( idftC2, idftImage, nil, nil, nil)
+        print 'conjugate'
     end
 }
 running = true
-while running do        
+while running do
     local key = cv.WaitKey(-1);
     if key == 27 then
         break
@@ -175,7 +205,7 @@ while running do
     if variant ~= nil then
         variant()
     end
-    --LogScaleImageInPlance(idftImage)
+    --LogScaleImageInPlace(idftImage)
     FinalScaleImageInplace(idftImage)
     cv.ShowImage(IMG_IDFT, idftImage)
 end
