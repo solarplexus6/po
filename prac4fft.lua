@@ -40,7 +40,7 @@ function ShiftDFT(src_im)
     cv.Copy(tmp,q2)
 end
 
-filename=not arg[1] and "sin2.png" or arg[1]
+filename=not arg[1] and "land.png" or arg[1]
 
 im = cv.LoadImage( filename, cv.CV_LOAD_IMAGE_GRAYSCALE );
 if not im then error("Couldn't load image") end
@@ -173,27 +173,56 @@ local variants = {
     function ()
         cv.Pow( dftRe, tmpMat, 2.0)
         cv.Pow( dftIm, tmpMat2, 2.0)
-        cv.Add( tmpMat, tmpMat2, idftC1, nil)
-        cv.DFT( idftC1, idftC1, cv.CV_DXT_INVERSE, complexInput.height)
-        cv.Split( idftC1, idftImage, nil, nil, nil)
+        cv.Add( tmpMat, tmpMat2, tmpMat2, nil)
+        cv.Zero(tmpMat)
+        cv.Merge(tmpMat2, tmpMat, nil, nil, idftC2)
+        cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
+        cv.Split( idftC2, idftImage, nil, nil, nil)
         print 'norm'
     end,
-    -- 7. phase
+    -- 7. phase -- obraz widoczny ma byc, bo to kierunki krzywych
+    -- zle, chodzi o unormowanie, ale nie tylko kat
     function ()
-        cv.Copy( angle, idftC1)
-        cv.DFT( idftC1, idftC1, cv.CV_DXT_INVERSE, complexInput.height)
-        cv.Split( idftC1, idftImage, nil, nil, nil)
+        
+        --cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
+        --cv.Split( idftC2, idftImage, nil, nil, nil)
         print 'phase'
     end,
-    -- 7. conjugate
+    -- 8. conjugate
     function ()
-        local minus = cv.ScalarAll(-1)
-        cv.Mul(dftIm, minus, tmpMat)
-        cv.Merge(dftRe, dftIm, idftC2);
+        cv.ConvertScale(dftIm, tmpMat, -1)
+        cv.Merge(dftRe, tmpMat, nil, nil, idftC2);
         cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
         cv.Split( idftC2, idftImage, nil, nil, nil)
         print 'conjugate'
-    end
+    end,
+    -- 9. 0.25a+ ib
+    function ()
+        cv.ConvertScale(dftRe, tmpMat, 0.25)
+        cv.Merge(tmpMat, dftIm, nil, nil, idftC2);
+        cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
+        cv.Split( idftC2, idftImage, nil, nil, nil)
+        print '0.25a+ ib'
+    end,
+    -- :. (a + ib) * (m^2 + n^2) -- zle, indeksy pozycji
+    function ()
+        local scale = math.pow(dft_M, 2.0) + math.pow(dft_N, 2.0)
+        cv.ConvertScale(dftRe, tmpMat, scale)
+        cv.ConvertScale(dftIm, tmpMat2, scale)
+        cv.Merge(tmpMat, tmpMat2, nil, nil, idftC2)
+        cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
+        cv.Split( idftC2, idftImage, nil, nil, nil)
+        print '(a + ib) * (m^2 + n^2)'
+    end,
+    function ()
+        local scale = math.pow(dft_M, 2.0) + math.pow(dft_N, 2.0)
+        cv.ConvertScale(dftRe, tmpMat, scale)
+        cv.ConvertScale(dftIm, tmpMat2, scale)
+        cv.Merge(tmpMat, tmpMat2, nil, nil, idftC2)
+        cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
+        cv.Split( idftC2, idftImage, nil, nil, nil)
+        print '(a + ib) * (m^2 + n^2)'
+    end,
 }
 running = true
 while running do
