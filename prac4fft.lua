@@ -1,6 +1,7 @@
 local cv=require("luacv")
 
 local IMG_WIN = "img"
+local IMG_DFT = "dft"
 local IMG_IDFT = "inverse dft"
 local IMG_DFT_RE = "dft re"
 local IMG_DFT_IM = "dft im"
@@ -12,32 +13,10 @@ function FinalScaleImageInplace(img)
     cv.Scale(img, img, 1.0/(M-m), 1.0*(-m)/(M-m))
 end
 
-function LogScaleImageInPlance(img)
+function LogScaleImageInPlace(img)
     -- Compute log(1 + img)
     cv.AddS( img, cv.ScalarAll(1.0), img, nil );
     cv.Log( img, img);
-end
-
-function ShiftDFT(src_im)
-    local center=cv.Point(src_im.height/2,src_im.width/2)
-    local qstub={} 
-    for i=1,4 do
-        qstub[i]=cv.CreateMatHeader(src_im.height,src_im.width,cv.CV_64FC1)
-    end
-
-    local q1=cv.GetSubRect(src_im,qstub[1],cv.Rect(0,0,center.x,center.y))
-    local q2=cv.GetSubRect(src_im,qstub[2],cv.Rect(center.x,0,center.x,center.y))
-    local q3=cv.GetSubRect(src_im,qstub[3],cv.Rect(center.x,center.y,center.x,center.y))
-    local q4=cv.GetSubRect(src_im,qstub[4],cv.Rect(0,center.y,center.x,center.y))
-    
-    local tmp=cv.CreateMat(src_im.height/2,src_im.width/2,cv.CV_64FC1)
-
-    cv.Copy(q3,tmp)
-    cv.Copy(q1,q3)
-    cv.Copy(tmp,q1)
-    cv.Copy(q4,tmp)
-    cv.Copy(q2,q4)
-    cv.Copy(tmp,q2)
 end
 
 filename=not arg[1] and "land.png" or arg[1]
@@ -65,6 +44,7 @@ dftRe = cv.CreateMat( dft_M, dft_N, cv.CV_64FC1 );
 dftIm = cv.CreateMat( dft_M, dft_N, cv.CV_64FC1 );
 tmpMat = cv.CreateMat( dft_M, dft_N, cv.CV_64FC1 );
 tmpMat2= cv.CreateMat(dft_M,dft_N,cv.CV_64FC1)
+tmpMat3= cv.CreateMat(dft_M,dft_N,cv.CV_64FC1)
 
 tmp=cv.CreateMatHeader(dft_M,dft_N,cv.CV_64FC2)
 
@@ -94,7 +74,6 @@ cv.Split( dft_A, image_Re, image_Im, nil, nil );
 cv.Split( dft_A, dftRe, dftIm, nil, nil);
 
 idftC2 = cv.CreateMat( dft_M, dft_N, cv.CV_64FC2 );
-idftC1 = cv.CreateMat( dft_M, dft_N, cv.CV_64FC1 );
 cv.DFT( dft_A, idftC2, cv.CV_DXT_INVERSE, complexInput.height);
 idftImage = cv.CreateImage( dft_size, cv.IPL_DEPTH_64F, 1);
 cv.Split( idftC2, idftImage, nil, nil, nil);
@@ -111,12 +90,12 @@ angle = cv.CreateImage( dft_size, cv.IPL_DEPTH_64F, 1);
 cv.CartToPolar(image_Re, image_Im, mag, angle)
 
 -- show dft magnitude
-LogScaleImageInPlance(mag)
+LogScaleImageInPlace(mag)
 FinalScaleImageInplace(mag)
 cv.ShowImage(IMG_MAG, mag)
 
 -- show dft angle
-LogScaleImageInPlance(angle)
+LogScaleImageInPlace(angle)
 FinalScaleImageInplace(angle)
 cv.ShowImage(IMG_ANGLE, angle);
 
@@ -125,35 +104,23 @@ cv.ShowImage(IMG_ANGLE, angle);
 --ShiftDFT( image_Re);
 
 -- show dft real part
-LogScaleImageInPlance(image_Re);
+LogScaleImageInPlace(image_Re);
 FinalScaleImageInplace(image_Re);
 cv.ShowImage(IMG_DFT_RE, image_Re);
 
 -- show dft imaginary part
-LogScaleImageInPlance(image_Im);
+LogScaleImageInPlace(image_Im);
 FinalScaleImageInplace(image_Im);
 cv.ShowImage(IMG_DFT_IM, image_Im);
 
 local variants = {
     --1. not changed image
     function ()        
-        cv.DFT( dft_A, idftC2, cv.CV_DXT_INVERSE, complexInput.height) 
+        cv.DFT( dft_A, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
         cv.Split( idftC2, idftImage, nil, nil, nil)
         print 'not altered idft'
-    end,
-    -- 2. real part
-    function ()        
-        cv.DFT( dftRe, idftC1, cv.CV_DXT_INVERSE, complexInput.height)
-        cv.Split( idftC1, idftImage, nil, nil, nil)
-        print 'real part'
-    end,
-    -- 3. imaginary part
-    function ()        
-        cv.DFT( dftIm, idftC1, cv.CV_DXT_INVERSE, complexInput.height);            
-        cv.Split( idftC1, idftImage, nil, nil, nil)
-        print 'imaginery part'
-    end,
-    -- 4. im part = 0
+    end,    
+    -- 2. im part = 0
     function ()
         cv.Zero(tmpMat)
         cv.Merge(dftRe, tmpMat, nil, nil, idftC2)
@@ -161,7 +128,7 @@ local variants = {
         cv.Split( idftC2, idftImage, nil, nil, nil)
         print 'im part = 0'
     end,
-    -- 5. im part = 0
+    -- 3. re part = 0
     function ()
         cv.Zero(tmpMat)
         cv.Merge(tmpMat, dftIm, nil, nil, idftC2)
@@ -169,26 +136,27 @@ local variants = {
         cv.Split( idftC2, idftImage, nil, nil, nil)
         print 'real part = 0'
     end,
-    -- 6. norm
+    -- 4. norm
     function ()
-        cv.Pow( dftRe, tmpMat, 2.0)
-        cv.Pow( dftIm, tmpMat2, 2.0)
-        cv.Add( tmpMat, tmpMat2, tmpMat2, nil)
-        cv.Zero(tmpMat)
-        cv.Merge(tmpMat2, tmpMat, nil, nil, idftC2)
+        cv.CartToPolar(dftRe, dftIm, tmpMat)
+        cv.Zero(tmpMat2)
+        cv.Merge(tmpMat, tmpMat2, nil, nil, idftC2)
         cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
         cv.Split( idftC2, idftImage, nil, nil, nil)
         print 'norm'
     end,
-    -- 7. phase -- obraz widoczny ma byc, bo to kierunki krzywych
-    -- zle, chodzi o unormowanie, ale nie tylko kat
+    -- 5. normalized -- obraz widoczny ma byc, bo to kierunki krzywych
     function ()
-        
-        --cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
-        --cv.Split( idftC2, idftImage, nil, nil, nil)
+        -- compute the magnitude
+        cv.CartToPolar(dftRe, dftIm, tmpMat)
+        cv.Div(dftRe, tmpMat, tmpMat2)
+        cv.Div(dftIm, tmpMat, tmpMat3)
+        cv.Merge(tmpMat2, tmpMat3, nil, nil, idftC2)
+        cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
+        cv.Split( idftC2, idftImage, nil, nil, nil)
         print 'phase'
     end,
-    -- 8. conjugate
+    -- 6. conjugate
     function ()
         cv.ConvertScale(dftIm, tmpMat, -1)
         cv.Merge(dftRe, tmpMat, nil, nil, idftC2);
@@ -196,7 +164,7 @@ local variants = {
         cv.Split( idftC2, idftImage, nil, nil, nil)
         print 'conjugate'
     end,
-    -- 9. 0.25a+ ib
+    -- 7. 0.25a+ ib
     function ()
         cv.ConvertScale(dftRe, tmpMat, 0.25)
         cv.Merge(tmpMat, dftIm, nil, nil, idftC2);
@@ -204,26 +172,84 @@ local variants = {
         cv.Split( idftC2, idftImage, nil, nil, nil)
         print '0.25a+ ib'
     end,
-    -- :. (a + ib) * (m^2 + n^2) -- zle, indeksy pozycji
+    -- 8. (a + ib) * (m^2 + n^2)
     function ()
-        local scale = math.pow(dft_M, 2.0) + math.pow(dft_N, 2.0)
-        cv.ConvertScale(dftRe, tmpMat, scale)
-        cv.ConvertScale(dftIm, tmpMat2, scale)
+        if scalars == nil then
+            scalars = {}
+            for i=0,dft_M - 1 do
+                for j=0,dft_N - 1 do
+                  table.insert(scalars, math.pow(i,2) + math.pow(j,2))
+                end
+            end
+            scalarsMat=cv.Mat(dft_M, dft_N, cv.CV_32FC1, scalars)
+        end
+                
+        cv.Mul(dftRe, scalarsMat, tmpMat)
+        cv.Mul(dftIm, scalarsMat, tmpMat2)
         cv.Merge(tmpMat, tmpMat2, nil, nil, idftC2)
         cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
         cv.Split( idftC2, idftImage, nil, nil, nil)
         print '(a + ib) * (m^2 + n^2)'
     end,
+    -- 9. wyzerujemy gdy nie jest w kwadracie rozmiaru K=50, o środku w (0,0)
     function ()
-        local scale = math.pow(dft_M, 2.0) + math.pow(dft_N, 2.0)
-        cv.ConvertScale(dftRe, tmpMat, scale)
-        cv.ConvertScale(dftIm, tmpMat2, scale)
+        cv.Zero(idftC2)
+        cv.Zero(tmpMat)
+        cv.Zero(tmpMat2)
+        local K = 50
+        
+        CopyCorners(dftRe, tmpMat, K)
+        CopyCorners(dftIm, tmpMat2, K)
+                
+        --cv.CartToPolar(tmpMat, tmpMat2, idftImage)
+        --LogScaleImageInPlace(idftImage)
         cv.Merge(tmpMat, tmpMat2, nil, nil, idftC2)
         cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
         cv.Split( idftC2, idftImage, nil, nil, nil)
-        print '(a + ib) * (m^2 + n^2)'
+        print 'filtr dolnoprzepustowy'
+    end,
+    [0] = function ()
+        if translate == nil then
+            translate = {}
+            for i=0,dft_M - 1 do
+                for j=0,dft_N - 1 do
+                  table.insert(translate, math.pow(-1, i + j))
+                end
+            end
+            translateMat=cv.Mat(dft_M, dft_N, cv.CV_32FC1, translate)
+        end
+        cv.Mul(realInput, translateMat, tmpMat)        
+        cv.Zero(tmpMat2)
+        cv.Merge(tmpMat, tmpMat2, nil, nil, idftC2)
+        cv.DFT( idftC2, idftC2, cv.CV_DXT_FORWARD, complexInput.height );
+        cv.Split( idftC2, tmpMat, tmpMat2, nil, nil)
+        cv.CartToPolar(tmpMat, tmpMat2, idftImage)
+        LogScaleImageInPlace(idftImage)
+        print 'translacja dft'
     end,
 }
+
+function CopyCorners(src, dest, rectSize)
+    local rS = rectSize
+    local n = src.width
+    local m = src.height
+    local qstub =cv.CreateMatHeader(rS, rS,cv.CV_64FC1)
+    local rstub =cv.CreateMatHeader(rS, rS,cv.CV_64FC1)
+
+    local q = cv.GetSubRect(src,qstub,cv.Rect(0,0, rS,rS))
+    local r = cv.GetSubRect(dest,rstub,cv.Rect(0,0,rS,rS))
+    cv.Copy(q, r)
+    q = cv.GetSubRect(src,qstub,cv.Rect(n - rS, m - rS, rS, rS))
+    r = cv.GetSubRect(dest,rstub,cv.Rect(n - rS, m - rS, rS, rS))
+    cv.Copy(q, r)
+    q = cv.GetSubRect(src,qstub,cv.Rect(0, m - rS, rS, rS))
+    r = cv.GetSubRect(dest,rstub,cv.Rect(0, m - rS, rS, rS))
+    cv.Copy(q, r)
+    q = cv.GetSubRect(src,qstub,cv.Rect(n - rS, 0, rS, rS))
+    r = cv.GetSubRect(dest,rstub,cv.Rect(n - rS, 0, rS, rS))
+    cv.Copy(q, r)
+end
+
 running = true
 while running do
     local key = cv.WaitKey(-1);
@@ -233,7 +259,7 @@ while running do
     local variant = variants[key - string.byte('0')]
     if variant ~= nil then
         variant()
-    end
+    end    
     --LogScaleImageInPlace(idftImage)
     FinalScaleImageInplace(idftImage)
     cv.ShowImage(IMG_IDFT, idftImage)

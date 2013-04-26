@@ -1,0 +1,1 @@
+.\bin\lua.exe prac4fft.lua land.png

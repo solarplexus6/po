@@ -19,7 +19,8 @@ function ShiftDFT(src_im)
     cv.Copy(tmp,q1)
     cv.Copy(q4,tmp)
     cv.Copy(q2,q4)
-    cv.Copy(tmp,q2)
+    --cv.Copy(tmp,q2)
+    cv.Zero(q2)
 end
 
 filename=not arg[1] and "lena.png" or arg[1]
