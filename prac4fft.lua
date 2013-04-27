@@ -1,7 +1,6 @@
 local cv=require("luacv")
 
 local IMG_WIN = "img"
-local IMG_DFT = "dft"
 local IMG_IDFT = "inverse dft"
 local IMG_DFT_RE = "dft re"
 local IMG_DFT_IM = "dft im"
@@ -19,7 +18,28 @@ function LogScaleImageInPlace(img)
     cv.Log( img, img);
 end
 
-filename=not arg[1] and "land.png" or arg[1]
+function CopyCorners(src, dest, rectSize)
+    local rS = rectSize
+    local n = src.width
+    local m = src.height
+    local qstub =cv.CreateMatHeader(rS, rS,cv.CV_64FC1)
+    local rstub =cv.CreateMatHeader(rS, rS,cv.CV_64FC1)
+
+    local q = cv.GetSubRect(src,qstub,cv.Rect(0,0, rS,rS))
+    local r = cv.GetSubRect(dest,rstub,cv.Rect(0,0,rS,rS))
+    cv.Copy(q, r)
+    q = cv.GetSubRect(src,qstub,cv.Rect(n - rS, m - rS, rS, rS))
+    r = cv.GetSubRect(dest,rstub,cv.Rect(n - rS, m - rS, rS, rS))
+    cv.Copy(q, r)
+    q = cv.GetSubRect(src,qstub,cv.Rect(0, m - rS, rS, rS))
+    r = cv.GetSubRect(dest,rstub,cv.Rect(0, m - rS, rS, rS))
+    cv.Copy(q, r)
+    q = cv.GetSubRect(src,qstub,cv.Rect(n - rS, 0, rS, rS))
+    r = cv.GetSubRect(dest,rstub,cv.Rect(n - rS, 0, rS, rS))
+    cv.Copy(q, r)
+end
+
+filename=not arg[1] and "lena.png" or arg[1]
 
 im = cv.LoadImage( filename, cv.CV_LOAD_IMAGE_GRAYSCALE );
 if not im then error("Couldn't load image") end
@@ -146,6 +166,7 @@ local variants = {
         print 'norm'
     end,
     -- 5. normalized -- obraz widoczny ma byc, bo to kierunki krzywych
+    -- CO Z OBRAZEM Z POJEDYNCZA SKLADOWA?
     function ()
         -- compute the magnitude
         cv.CartToPolar(dftRe, dftIm, tmpMat)
@@ -159,7 +180,7 @@ local variants = {
     -- 6. conjugate
     function ()
         cv.ConvertScale(dftIm, tmpMat, -1)
-        cv.Merge(dftRe, tmpMat, nil, nil, idftC2);
+        cv.Merge(dftRe, tmpMat, nil, nil, idftC2)
         cv.DFT( idftC2, idftC2, cv.CV_DXT_INVERSE, complexInput.height)
         cv.Split( idftC2, idftImage, nil, nil, nil)
         print 'conjugate'
@@ -178,12 +199,12 @@ local variants = {
             scalars = {}
             for i=0,dft_M - 1 do
                 for j=0,dft_N - 1 do
-                  table.insert(scalars, math.pow(i,2) + math.pow(j,2))
+                    table.insert(scalars, math.pow(i,2) + math.pow(j,2))
                 end
             end
             scalarsMat=cv.Mat(dft_M, dft_N, cv.CV_32FC1, scalars)
         end
-                
+        
         cv.Mul(dftRe, scalarsMat, tmpMat)
         cv.Mul(dftIm, scalarsMat, tmpMat2)
         cv.Merge(tmpMat, tmpMat2, nil, nil, idftC2)
@@ -196,7 +217,7 @@ local variants = {
         cv.Zero(idftC2)
         cv.Zero(tmpMat)
         cv.Zero(tmpMat2)
-        local K = 50
+        local K = 25
         
         CopyCorners(dftRe, tmpMat, K)
         CopyCorners(dftIm, tmpMat2, K)
@@ -228,27 +249,6 @@ local variants = {
         print 'translacja dft'
     end,
 }
-
-function CopyCorners(src, dest, rectSize)
-    local rS = rectSize
-    local n = src.width
-    local m = src.height
-    local qstub =cv.CreateMatHeader(rS, rS,cv.CV_64FC1)
-    local rstub =cv.CreateMatHeader(rS, rS,cv.CV_64FC1)
-
-    local q = cv.GetSubRect(src,qstub,cv.Rect(0,0, rS,rS))
-    local r = cv.GetSubRect(dest,rstub,cv.Rect(0,0,rS,rS))
-    cv.Copy(q, r)
-    q = cv.GetSubRect(src,qstub,cv.Rect(n - rS, m - rS, rS, rS))
-    r = cv.GetSubRect(dest,rstub,cv.Rect(n - rS, m - rS, rS, rS))
-    cv.Copy(q, r)
-    q = cv.GetSubRect(src,qstub,cv.Rect(0, m - rS, rS, rS))
-    r = cv.GetSubRect(dest,rstub,cv.Rect(0, m - rS, rS, rS))
-    cv.Copy(q, r)
-    q = cv.GetSubRect(src,qstub,cv.Rect(n - rS, 0, rS, rS))
-    r = cv.GetSubRect(dest,rstub,cv.Rect(n - rS, 0, rS, rS))
-    cv.Copy(q, r)
-end
 
 running = true
 while running do
