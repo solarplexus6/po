@@ -1,3 +1,7 @@
+-- Rafał Łukaszewski
+-- Przetwarzanie obrazów
+-- Prac4FFT
+
 local cv=require("luacv")
 
 local IMG_WIN = "img"
